@@ -225,7 +225,7 @@ namespace Unlimotion.ViewModel
                         }
                     }
                     break;
-                _: throw new NotImplementedException("Передан неизвестный тип действия над таском");
+                _: throw new NotImplementedException("пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ");
             }                      
         }
 
@@ -242,7 +242,7 @@ namespace Unlimotion.ViewModel
                 case BLL.Action.RemoveContains:
                     parent.Contains.Remove(change.Id);
                     break;
-                _: throw new NotImplementedException("Передан неизвестный тип действия над таском");
+                _: throw new NotImplementedException("пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ");
             }
         }
 
