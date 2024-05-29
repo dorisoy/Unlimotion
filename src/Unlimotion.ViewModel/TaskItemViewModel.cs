@@ -163,7 +163,7 @@ namespace Unlimotion.ViewModel
                 .AddToDispose(this);
 
             //Subscribe for set BlockedBy for Blocks
-            BlocksTasks.ToObservableChangeSet()
+            /*BlocksTasks.ToObservableChangeSet()
                 .Subscribe(set =>
                 {
                     foreach (var change in set)
@@ -202,7 +202,7 @@ namespace Unlimotion.ViewModel
                                 throw new ArgumentOutOfRangeException();
                         }
                     }
-                }).AddToDispose(this);
+                }).AddToDispose(this);*/
 
             //Subscribe BlockedBy
             var blockedByFilter = BlockedBy.ToObservableChangeSet()
@@ -231,6 +231,7 @@ namespace Unlimotion.ViewModel
                         var clone = new TaskItem
                         {
                             BlocksTasks = Model.BlocksTasks.ToList(),
+                            BlockedByTasks = Model.BlockedByTasks.ToList(),
                             ContainsTasks = Model.ContainsTasks.ToList(),
                             Description = Model.Description,
                             Title = Model.Title,
@@ -376,6 +377,7 @@ namespace Unlimotion.ViewModel
                 var clone = new TaskItem
                 {
                     BlocksTasks = Model.BlocksTasks.ToList(),
+                    BlockedByTasks = Model.BlockedByTasks.ToList(),
                     ContainsTasks = Model.ContainsTasks.ToList(),
                     Description = Model.Description,
                     Title = Model.Title,
@@ -386,18 +388,19 @@ namespace Unlimotion.ViewModel
                 return await taskRepository.Clone(clone, destination);
             };
 
-            UnblockMeCommand = ReactiveCommand.Create<TaskItemViewModel, Unit>(
-                m =>
+            /*UnblockMeCommand = ReactiveCommand.Create<TaskItemViewModel>(
+                async m =>
                 {
                     this.Blocks.Remove(m.Id);
                     return Unit.Default;
-                });
+                });*/
 
-            UnblockCommand = ReactiveCommand.Create<TaskItemViewModel, Unit>(
-                m =>
+            UnblockCommand = ReactiveCommand.Create<TaskItemViewModel>(
+                async m =>
                 {
-                    m.Blocks.Remove(Id);
-                    return Unit.Default;
+                    await((TaskRepository)taskRepository).UpdateStorageAsync(this, TaskAction.Unblock, m);
+                    //m.Blocks.Remove(Id);
+                    //return Unit.Default;
                 });
 
             //Subscribe to Save when property changed
@@ -499,13 +502,13 @@ namespace Unlimotion.ViewModel
                 })
                 .AddToDispose(this);*/
 
-            Blocks.ToObservableChangeSet()
+            /*Blocks.ToObservableChangeSet()
                 //.Throttle(TimeSpan.FromSeconds(2))
                 .Subscribe(set =>
                 {
                     if (_isInited) SaveItemCommand.Execute();
                 })
-                .AddToDispose(this);
+                .AddToDispose(this);*/
 
             this.WhenAnyValue(t => t.Repeater)
                 .Subscribe(r =>
@@ -590,6 +593,7 @@ namespace Unlimotion.ViewModel
                     Wanted = Wanted,
                     IsCompleted = IsCompleted,
                     BlocksTasks = Blocks.ToList(),
+                    BlockedByTasks = BlockedBy.ToList(),
                     ContainsTasks = Contains.ToList(),
                     ParentTasks = Parents.ToList(),
                     Repeater = Repeater?.Model,
@@ -665,9 +669,10 @@ namespace Unlimotion.ViewModel
             return await CloneFunc.Invoke(destination);
         }
 
-        public void BlockBy(TaskItemViewModel blocker)
+        public async void BlockBy(TaskItemViewModel blocker)
         {
-            blocker.Blocks.Add(Id);
+            //blocker.Blocks.Add(Id);
+            await ((TaskRepository)_taskRepository).UpdateStorageAsync(this, TaskAction.Block, blocker);
         }
 
         public IEnumerable<TaskItemViewModel> GetFirstParentsPath()
@@ -801,6 +806,7 @@ namespace Unlimotion.ViewModel
             if (IsCompleted != taskItem.IsCompleted) IsCompleted = taskItem.IsCompleted;
 
             SynchronizeCollections(Blocks, taskItem.BlocksTasks);
+            SynchronizeCollections(BlockedBy, taskItem.BlockedByTasks);
             SynchronizeCollections(Contains, taskItem.ContainsTasks);
             SynchronizeCollections(Parents, taskItem.ParentTasks);
 
