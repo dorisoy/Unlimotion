@@ -129,8 +129,10 @@ public class ServerTaskStorage : ITaskStorage
     {
         await SignOut();
     }
-    public void Init()
-    { }
+    public Task Init()
+    {
+        return Task.CompletedTask;
+    }
 
     public async Task<TaskItem> Load(string itemId)
     {
@@ -379,26 +381,30 @@ public class ServerTaskStorage : ITaskStorage
 
     public bool IsSignedIn { get; set; }
 
-    public IEnumerable<TaskItem> GetAll()
+    public async Task<IEnumerable<TaskItem>> GetAll()
     {
         TaskItemPage? tasks = null;
         try
         {
-            tasks = serviceClient.GetAsync(new GetAllTasks()).Result;
+            tasks = await serviceClient.GetAsync(new GetAllTasks());
         }
         catch (Exception e)
         {
             //TODO пробросить ошибку пользователю
         }
 
+        List<TaskItem> taskItems = [];
+
         if (tasks?.Tasks != null)
         {
             foreach (var task in tasks.Tasks)
             {
                 var mapped = mapper.Map<TaskItem>(task);
-                yield return mapped;
+                taskItems.Add(mapped);
+                //yield return mapped;
             }
         }
+        return taskItems;
     }
 
     public async Task<bool> Save(TaskItem item)

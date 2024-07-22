@@ -31,5 +31,7 @@ namespace Unlimotion.Interface
         public RepeaterPatternHubMold Repeater { get; set; }
         public int Importance { get; set; }
         public bool Wanted { get; set; }
+
+        public bool PrevVersion { get; set; } = true;
     }
 }

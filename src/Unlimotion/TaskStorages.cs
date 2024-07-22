@@ -62,7 +62,7 @@ namespace Unlimotion
                 }
                 var storagePath = configuration.Get<TaskStorageSettings>("TaskStorage")?.Path;
                 var fileTaskStorage = CreateFileTaskStorage(storagePath);
-                await serverTaskStorage.BulkInsert(fileTaskStorage.GetAll());
+                await serverTaskStorage.BulkInsert(await fileTaskStorage.GetAll());
             });
             settingsViewModel.BackupCommand = ReactiveCommand.CreateFromTask(async () =>
             {
@@ -73,7 +73,7 @@ namespace Unlimotion
                 }
                 var storagePath = configuration.Get<TaskStorageSettings>("TaskStorage")?.Path;
                 var fileTaskStorage = CreateFileTaskStorage(storagePath);
-                var tasks = serverTaskStorage.GetAll();
+                var tasks = await serverTaskStorage.GetAll();
                 foreach (var task in tasks)
                 {
                     task.Id = task.Id.Replace("TaskItem/", "");
@@ -92,7 +92,7 @@ namespace Unlimotion
             {
                 var storagePath = configuration.Get<TaskStorageSettings>("TaskStorage")?.Path;
                 var fileTaskStorage = CreateFileTaskStorage(storagePath);
-                var tasks = fileTaskStorage.GetAll();
+                var tasks = await fileTaskStorage.GetAll();
                 foreach (var task in tasks)
                 {
                     await fileTaskStorage.Save(mapper.Map<Server.Domain.TaskItem>(task));

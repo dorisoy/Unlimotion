@@ -11,8 +11,8 @@ public interface ITaskStorage
 {
     public SourceCache<TaskItemViewModel, string> Tasks { get; }  
     public ITaskTreeManager TaskTreeManager { get; set; }
-    public void Init();    
-    public IEnumerable<TaskItem> GetAll();
+    public Task Init();    
+    public Task<IEnumerable<TaskItem>> GetAll();
     //Task<bool> Save(TaskItem item);
     //Task<bool> Remove(string itemId);
     //Task<TaskItem> Load(string itemId);

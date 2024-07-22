@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
@@ -41,20 +42,23 @@ namespace Unlimotion
             mapper = Locator.Current.GetService<IMapper>();
         }
 
-        public IEnumerable<TaskItem> GetAll()
+        public async Task<IEnumerable<TaskItem>> GetAll()
         {
             var directoryInfo = new DirectoryInfo(Path);
-
+            List<TaskItem> tasks = []; 
             foreach (var fileInfo in directoryInfo.EnumerateFiles())
             {
-                var task = Load(fileInfo.FullName).Result;
+                //var task = Load(fileInfo.FullName).Result;
+                var task = await TaskTreeManager.LoadTask(fileInfo.FullName); 
                 if (task != null)
                 {
-                    yield return mapper.Map<TaskItem>(task);                  
+                    //yield return mapper.Map<TaskItem>(task);
+                    tasks.Add(mapper.Map<TaskItem>(task));
                 }
             }
+            return tasks;
         }
-        public void Init() => Init(GetAll());
+        public async Task Init() => Init(await GetAll());
         private void Init(IEnumerable<TaskItem> tasks)
         {
             Tasks = new(item => item.Id);

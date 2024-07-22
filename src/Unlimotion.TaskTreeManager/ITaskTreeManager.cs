@@ -22,5 +22,7 @@ public interface ITaskTreeManager
     public Task<List<TaskItem>> UnblockTask(TaskItem taskToUnblock, TaskItem blockingTask);
 
     public Task<List<TaskItem>> BlockTask(TaskItem taskToBlock, TaskItem blockingTask);
+
+    public Task<TaskItem> LoadTask(string taskId);
 }
 

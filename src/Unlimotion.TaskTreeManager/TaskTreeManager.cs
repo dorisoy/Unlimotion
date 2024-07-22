@@ -22,6 +22,7 @@ public class TaskTreeManager : ITaskTreeManager
             {
                 try
                 {
+                    change.PrevVersion = false;
                     await Storage.Save(change);
                     result.Add(change);
 
@@ -45,6 +46,7 @@ public class TaskTreeManager : ITaskTreeManager
                 {
                     if (newTaskId is null)
                     {
+                        change.PrevVersion = false;
                         await Storage.Save(change);
                         newTaskId = change.Id;
                     }
@@ -100,6 +102,7 @@ public class TaskTreeManager : ITaskTreeManager
             {
                 if (newTaskId is null)
                 {
+                    change.PrevVersion = false;
                     change.ParentTasks.Add(currentTask.Id);
                     await Storage.Save(change);
                     newTaskId = change.Id;
@@ -226,6 +229,7 @@ public class TaskTreeManager : ITaskTreeManager
             {
                 if (newTaskId is null)
                 {
+                    change.PrevVersion = false;
                     await Storage.Save(change);
                     newTaskId = change.Id;
                 }
@@ -419,6 +423,49 @@ public class TaskTreeManager : ITaskTreeManager
 
         return result;
     }
+
+    public async Task<TaskItem> LoadTask(string taskId)
+    {
+        var task = await Storage.Load(taskId);
+
+        if (!task.PrevVersion) 
+            return task;
+
+        if (task.ContainsTasks is not null)
+        {
+           foreach (var childTask in task.ContainsTasks)
+           {
+               var childItem = await Storage.Load(childTask);
+
+               if (!(childItem.ParentTasks ?? []).Contains(task.Id))
+               {
+                  childItem.ParentTasks!.Add(task.Id);
+                  await Storage.Save(childItem);
+               }
+           }
+        }
+
+        if (task.BlocksTasks is not null)
+        {
+           foreach (var blockedTask in task.BlocksTasks)
+           {
+              var blockedItem = await Storage.Load(blockedTask);
+
+              if (!(blockedItem.BlockedByTasks ?? []).Contains(task.Id))
+              {
+                 blockedItem.BlockedByTasks!.Add(task.Id);
+                 await Storage.Save(blockedItem);
+              }
+           }
+        }
+
+        task.PrevVersion = false;
+        await Storage.Save(task);
+
+        return task;
+    }       
+        
+    
     private async Task<bool> IsCompletedAsync(Func<Task<bool>> task, TimeSpan? timeout = null)
     {
         TimeSpan countRetry = timeout ?? TimeSpan.FromMinutes(2);

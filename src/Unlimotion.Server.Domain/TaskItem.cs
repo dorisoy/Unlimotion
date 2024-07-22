@@ -24,5 +24,6 @@ namespace Unlimotion.Server.Domain
         public RepeaterPattern Repeater { get; set; }
         public int Importance { get; set; }
         public bool Wanted { get; set; }
+        public bool PrevVersion { get; set; } = true;
     }
 }
