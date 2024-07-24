@@ -76,7 +76,12 @@ namespace Unlimotion.ViewModel
             Create = ReactiveCommand.CreateFromTask(async () =>
             {
                 var taskRepository = Locator.Current.GetService<ITaskStorage>();
-                var task = new TaskItemViewModel(new TaskItem(), taskRepository);
+                var taskItem = new TaskItem()
+                {
+                    IsCurrent = true
+                };
+                
+                var task = new TaskItemViewModel(taskItem, taskRepository);                
                 
                 await taskRepository?.Add(task);
                 CurrentTaskItem = task;

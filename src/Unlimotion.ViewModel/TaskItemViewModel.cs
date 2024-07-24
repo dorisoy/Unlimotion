@@ -451,6 +451,7 @@ namespace Unlimotion.ViewModel
                     ContainsTasks = Contains.ToList(),
                     ParentTasks = Parents.ToList(),
                     Repeater = Repeater?.Model,
+                    IsCurrent = IsCurrent,
                 };
             set
             {
@@ -483,6 +484,7 @@ namespace Unlimotion.ViewModel
         public TimeSpan? PlannedDuration { get; set; }
         public int Importance { get; set; }
         public bool Wanted { get; set; }
+        public bool IsCurrent { get; set; }
 
         public ReadOnlyObservableCollection<TaskItemViewModel> ContainsTasks => _containsTasks;
 
@@ -654,6 +656,7 @@ namespace Unlimotion.ViewModel
             if (Importance != taskItem.Importance) Importance = taskItem.Importance;
             if (Wanted != taskItem.Wanted) Wanted = taskItem.Wanted;
             if (IsCompleted != taskItem.IsCompleted) IsCompleted = taskItem.IsCompleted;
+            if (IsCurrent != taskItem.IsCurrent) IsCurrent = taskItem.IsCurrent;
 
             SynchronizeCollections(Blocks, taskItem.BlocksTasks);
             SynchronizeCollections(BlockedBy, taskItem.BlockedByTasks);
@@ -684,7 +687,7 @@ namespace Unlimotion.ViewModel
             }
         }
 
-        static void SynchronizeCollections(ObservableCollection<string> observableCollection, List<string> list)
+        public static void SynchronizeCollections(ObservableCollection<string> observableCollection, List<string> list)
         {
             if (observableCollection == null)
             {

@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Globalization;
 using System.IO;
 using System.Linq;
@@ -18,6 +19,8 @@ using Splat;
 using Unlimotion.TaskTree;
 using Unlimotion.ViewModel;
 using Unlimotion.ViewModel.Models;
+using static System.Reflection.Metadata.BlobBuilder;
+using Unlimotion.Views.Graph;
 using JsonSerializer = Newtonsoft.Json.JsonSerializer;
 
 namespace Unlimotion
@@ -236,7 +239,9 @@ namespace Unlimotion
 
             foreach (var task in taskItemList)
             {
-                UpdateCache(task);
+                if (task.IsCurrent) UpdateCache(task, change);
+                else UpdateCache(task);
+
                 if (currentTask is null || (!currentTask.Parents.Contains(task.Id) && currentTask.Id != task.Id)) 
                     change.Id = task.Id;                 
             }
@@ -245,12 +250,16 @@ namespace Unlimotion
 
         public async Task<bool> AddChild(TaskItemViewModel change, TaskItemViewModel currentTask)
         {
+            change.Model.IsCurrent = true;
+
             var taskItemList = await TaskTreeManager.AddChildTask(
                 mapper.Map<Server.Domain.TaskItem>(change.Model),
                 mapper.Map<Server.Domain.TaskItem>(currentTask.Model));
             foreach (var task in taskItemList)
             {
-                UpdateCache(task);
+                if (task.IsCurrent) UpdateCache(task, change);
+                else UpdateCache(task);
+                
                 if (task.Id != currentTask.Id)
                 {
                     change.Id = task.Id;
@@ -285,6 +294,8 @@ namespace Unlimotion
 
         public async Task<TaskItemViewModel> Clone(TaskItemViewModel change, params TaskItemViewModel[]? additionalParents)
         {
+            change.Model.IsCurrent = true;
+
             var additionalItemParents = new List<Server.Domain.TaskItem>();
             foreach (var newParent in additionalParents)
             {
@@ -295,7 +306,9 @@ namespace Unlimotion
                 additionalItemParents);
             foreach (var task in taskItemList)
             {
-                UpdateCache(task);
+                if (task.IsCurrent) UpdateCache(task, change);
+                else UpdateCache(task);
+                
                 if (!task.ContainsTasks.Any())
                 {
                     change.Id = task.Id;
@@ -323,10 +336,24 @@ namespace Unlimotion
             }
             return true;
         }
-        private void UpdateCache(Server.Domain.TaskItem task)
+        private void UpdateCache(Server.Domain.TaskItem task, TaskItemViewModel? vm = null)
         {
             var taskItem = mapper.Map<TaskItem>(task);
-            Tasks.AddOrUpdate(new TaskItemViewModel(taskItem, this));
+
+            if (taskItem.IsCurrent)
+            {
+                ArgumentNullException.ThrowIfNull(vm);
+                vm.Id = task.Id;
+
+                TaskItemViewModel.SynchronizeCollections(vm.Blocks, taskItem.BlocksTasks);
+                TaskItemViewModel.SynchronizeCollections(vm.BlockedBy, taskItem.BlockedByTasks);
+                TaskItemViewModel.SynchronizeCollections(vm.Contains, taskItem.ContainsTasks);
+                TaskItemViewModel.SynchronizeCollections(vm.Parents, taskItem.ParentTasks);
+
+                Tasks.AddOrUpdate(vm);
+            }
+            else
+               Tasks.AddOrUpdate(new TaskItemViewModel(taskItem, this));
         }
 
         public async Task<bool> MoveInto(TaskItemViewModel change, TaskItemViewModel[]? additionalParents, TaskItemViewModel? currentTask)
