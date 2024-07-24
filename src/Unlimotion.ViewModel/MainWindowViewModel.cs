@@ -13,6 +13,7 @@ using Microsoft.Extensions.Configuration;
 using PropertyChanged;
 using ReactiveUI;
 using Splat;
+using Unlimotion.Server.Domain;
 using Unlimotion.ViewModel;
 
 namespace Unlimotion.ViewModel
@@ -93,7 +94,11 @@ namespace Unlimotion.ViewModel
                 if (CurrentTaskItem != null && string.IsNullOrWhiteSpace(CurrentTaskItem.Title))
                     return;
                 var taskRepository = Locator.Current.GetService<ITaskStorage>();
-                var task = new TaskItemViewModel(new TaskItem(), taskRepository);
+                var taskItem = new TaskItem()
+                {
+                    IsCurrent = true
+                };
+                var task = new TaskItemViewModel(taskItem, taskRepository);
                 
                 if (CurrentTaskItem != null)
                 {
@@ -123,7 +128,11 @@ namespace Unlimotion.ViewModel
                 if (string.IsNullOrWhiteSpace(CurrentTaskItem.Title))
                     return;
                 var taskRepository = Locator.Current.GetService<ITaskStorage>();
-                var task = new TaskItemViewModel(new TaskItem(), taskRepository);
+                var taskItem = new TaskItem()
+                {
+                    IsCurrent = true
+                };
+                var task = new TaskItemViewModel(taskItem, taskRepository);
                 
                 await taskRepository?.AddChild(task, CurrentTaskItem);
 
