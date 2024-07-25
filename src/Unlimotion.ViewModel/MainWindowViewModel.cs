@@ -77,12 +77,8 @@ namespace Unlimotion.ViewModel
             Create = ReactiveCommand.CreateFromTask(async () =>
             {
                 var taskRepository = Locator.Current.GetService<ITaskStorage>();
-                var taskItem = new TaskItem()
-                {
-                    IsCurrent = true
-                };
-                
-                var task = new TaskItemViewModel(taskItem, taskRepository);                
+                                
+                var task = new TaskItemViewModel(new TaskItem(), taskRepository);                
                 
                 await taskRepository?.Add(task);
                 CurrentTaskItem = task;
@@ -94,11 +90,8 @@ namespace Unlimotion.ViewModel
                 if (CurrentTaskItem != null && string.IsNullOrWhiteSpace(CurrentTaskItem.Title))
                     return;
                 var taskRepository = Locator.Current.GetService<ITaskStorage>();
-                var taskItem = new TaskItem()
-                {
-                    IsCurrent = true
-                };
-                var task = new TaskItemViewModel(taskItem, taskRepository);
+                
+                var task = new TaskItemViewModel(new TaskItem(), taskRepository);
                 
                 if (CurrentTaskItem != null)
                 {
@@ -128,11 +121,8 @@ namespace Unlimotion.ViewModel
                 if (string.IsNullOrWhiteSpace(CurrentTaskItem.Title))
                     return;
                 var taskRepository = Locator.Current.GetService<ITaskStorage>();
-                var taskItem = new TaskItem()
-                {
-                    IsCurrent = true
-                };
-                var task = new TaskItemViewModel(taskItem, taskRepository);
+                
+                var task = new TaskItemViewModel(new TaskItem(), taskRepository);
                 
                 await taskRepository?.AddChild(task, CurrentTaskItem);
 

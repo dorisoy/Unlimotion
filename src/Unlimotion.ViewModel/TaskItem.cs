@@ -25,6 +25,6 @@ namespace Unlimotion.ViewModel
         public int Importance { get; set; }
         public bool Wanted { get; set; }
         public bool PrevVersion { get; set; } = true;
-        public bool IsCurrent { get; set; } = false;
+        public DateTime SortOrder { get; set; }
     }
 }

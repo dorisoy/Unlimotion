@@ -23,6 +23,7 @@ public class TaskTreeManager : ITaskTreeManager
                 try
                 {
                     change.PrevVersion = false;
+                    change.SortOrder = DateTime.Now;
                     await Storage.Save(change);
                     result.Add(change);
 
@@ -59,6 +60,7 @@ public class TaskTreeManager : ITaskTreeManager
                         if (!parentTask.ContainsTasks.Contains(newTaskId))
                         {
                             parentTask.ContainsTasks.Add(newTaskId);
+                            parentTask.SortOrder = DateTime.Now;
                             await Storage.Save(parentTask);
                             result.Add(parentTask);
                         }
@@ -69,12 +71,14 @@ public class TaskTreeManager : ITaskTreeManager
                         TaskItem currentTaskItem = await Storage.Load(currentTask.Id);
                         if (!currentTaskItem.BlocksTasks.Contains(newTaskId))
                             currentTask.BlocksTasks.Add(newTaskId);
+                        currentTask.SortOrder = DateTime.Now;
                         await Storage.Save(currentTask);
                         result.Add(currentTask);
 
                         change.BlockedByTasks.Add(currentTask.Id);
                     }
 
+                    change.SortOrder = DateTime.Now;
                     await Storage.Save(change);
                     result.Add(change);
 
@@ -109,7 +113,11 @@ public class TaskTreeManager : ITaskTreeManager
                 }
 
                 currentTask.ContainsTasks.Add(change.Id);
+                currentTask.SortOrder = DateTime.Now;
                 await Storage.Save(currentTask);
+
+                change.SortOrder = DateTime.Now;
+                await Storage.Save(change);
 
                 result.Add(change);
                 result.Add(currentTask);
@@ -230,6 +238,7 @@ public class TaskTreeManager : ITaskTreeManager
                 if (newTaskId is null)
                 {
                     change.PrevVersion = false;
+                    change.SortOrder = DateTime.Now;
                     await Storage.Save(change);
                     newTaskId = change.Id;
                 }
@@ -241,6 +250,7 @@ public class TaskTreeManager : ITaskTreeManager
                     if (!parentTask.ContainsTasks.Contains(newTaskId))
                     {
                         parentTask.ContainsTasks.Add(newTaskId);
+                        parentTask.SortOrder = DateTime.Now;
                         await Storage.Save(parentTask);
                         result.Add(parentTask);
                     }
@@ -249,11 +259,12 @@ public class TaskTreeManager : ITaskTreeManager
 
                     if (!changeTask.ParentTasks.Contains(parent.Id))
                     {
-                        changeTask.ParentTasks.Add(parent.Id);
-                        await Storage.Save(changeTask);
-                        result.Add(changeTask);
+                        changeTask.ParentTasks.Add(parent.Id);                        
                     }
-                }
+                    changeTask.SortOrder = DateTime.Now;
+                    await Storage.Save(changeTask);
+                    result.Add(changeTask);
+                }                
 
                 return true;
             }
