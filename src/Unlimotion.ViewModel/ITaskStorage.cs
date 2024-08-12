@@ -12,7 +12,7 @@ public interface ITaskStorage
     public SourceCache<TaskItemViewModel, string> Tasks { get; }  
     public ITaskTreeManager TaskTreeManager { get; set; }
     public Task Init();    
-    public Task<IEnumerable<TaskItem>> GetAll();
+    public IAsyncEnumerable<TaskItem> GetAll();
     //Task<bool> Save(TaskItem item);
     //Task<bool> Remove(string itemId);
     //Task<TaskItem> Load(string itemId);

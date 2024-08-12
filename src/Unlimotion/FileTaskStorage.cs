@@ -32,7 +32,7 @@ namespace Unlimotion
     {
         public SourceCache<TaskItemViewModel, string> Tasks { get; private set; }
         public ITaskTreeManager TaskTreeManager { get; set; }
-        
+
         public string Path { get; private set; }
         private IDatabaseWatcher? dbWatcher;
         public bool isPause;
@@ -44,33 +44,32 @@ namespace Unlimotion
 
         public FileTaskStorage(string path)
         {
-            Path = path;   
+            Path = path;
             mapper = Locator.Current.GetService<IMapper>();
         }
 
-        public async Task<IEnumerable<TaskItem>> GetAll()
+        public async IAsyncEnumerable<TaskItem> GetAll()
         {
             var directoryInfo = new DirectoryInfo(Path);
-            List<TaskItem> tasks = []; 
+
             foreach (var fileInfo in directoryInfo.EnumerateFiles())
             {
-                var task = await TaskTreeManager.LoadTask(fileInfo.FullName); 
+                var task = await TaskTreeManager.LoadTask(fileInfo.FullName);
                 if (task != null)
                 {
-                    tasks.Add(mapper.Map<TaskItem>(task));
+                    yield return mapper.Map<TaskItem>(task);
                 }
+                else throw new FileLoadException($"Не удалось загрузить файл с задачей {fileInfo.FullName}");
             }
-            return tasks;
         }
-        public async Task Init() => Init(await GetAll());
-        private void Init(IEnumerable<TaskItem> tasks)
+        public async Task Init() 
         {
             Tasks = new(item => item.Id);
-            
-            foreach (var task in tasks)
+
+            await foreach (var task in GetAll())
             {
                 var vm = new TaskItemViewModel(task, this);
-                Tasks.AddOrUpdate(vm);                
+                Tasks.AddOrUpdate(vm);
             }
 
             rootFilter = Tasks.Connect()
@@ -93,8 +92,8 @@ namespace Unlimotion
             dbWatcher.OnUpdated += DbWatcherOnUpdated;
 
             OnInited();
-        }
-
+        }        
+        
         private void TaskStorageOnUpdating(object sender, TaskStorageUpdateEventArgs e)
         {
             dbWatcher?.AddIgnoredTask(e.Id);

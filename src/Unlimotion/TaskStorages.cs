@@ -8,7 +8,9 @@ using Quartz;
 using AutoMapper;
 using ITrigger = Quartz.ITrigger;
 using Unlimotion.TaskTree;
- 
+using Newtonsoft.Json.Linq;
+using System.Collections.Generic;
+
 namespace Unlimotion
 {
     public static class TaskStorages
@@ -62,7 +64,10 @@ namespace Unlimotion
                 }
                 var storagePath = configuration.Get<TaskStorageSettings>("TaskStorage")?.Path;
                 var fileTaskStorage = CreateFileTaskStorage(storagePath);
-                await serverTaskStorage.BulkInsert(await fileTaskStorage.GetAll());
+                var tasks = new List<TaskItem>();
+                await foreach (var task in fileTaskStorage.GetAll())
+                    tasks.Add(task);
+                await serverTaskStorage.BulkInsert(tasks);
             });
             settingsViewModel.BackupCommand = ReactiveCommand.CreateFromTask(async () =>
             {
@@ -73,29 +78,27 @@ namespace Unlimotion
                 }
                 var storagePath = configuration.Get<TaskStorageSettings>("TaskStorage")?.Path;
                 var fileTaskStorage = CreateFileTaskStorage(storagePath);
-                var tasks = await serverTaskStorage.GetAll();
-                foreach (var task in tasks)
+                await foreach (var task in serverTaskStorage.GetAll())
                 {
-                    task.Id = task.Id.Replace("TaskItem/", "");
-                    if (task.BlocksTasks != null)
-                    {
+                      task.Id = task.Id.Replace("TaskItem/", "");
+                      if (task.BlocksTasks != null)
+                      {
                         task.BlocksTasks = task.BlocksTasks.Select(s => s.Replace("TaskItem/", "")).ToList();
-                    }
-                    if (task.ContainsTasks != null)
-                    {
+                      }
+                      if (task.ContainsTasks != null)
+                      {
                         task.ContainsTasks = task.ContainsTasks.Select(s => s.Replace("TaskItem/", "")).ToList();
-                    }
-                    await fileTaskStorage.Save(mapper.Map<Server.Domain.TaskItem>(task));
+                      }
+                      await fileTaskStorage.Save(mapper.Map<Server.Domain.TaskItem>(task));
                 }
             });
             settingsViewModel.ResaveCommand = ReactiveCommand.CreateFromTask(async () =>
             {
                 var storagePath = configuration.Get<TaskStorageSettings>("TaskStorage")?.Path;
                 var fileTaskStorage = CreateFileTaskStorage(storagePath);
-                var tasks = await fileTaskStorage.GetAll();
-                foreach (var task in tasks)
+                await foreach (var task in fileTaskStorage.GetAll())
                 {
-                    await fileTaskStorage.Save(mapper.Map<Server.Domain.TaskItem>(task));
+                      await fileTaskStorage.Save(mapper.Map<Server.Domain.TaskItem>(task));
                 }
             });
             settingsViewModel.BrowseTaskStoragePathCommand = ReactiveCommand.CreateFromTask(async (param) =>

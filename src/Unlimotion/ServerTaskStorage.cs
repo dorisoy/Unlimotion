@@ -381,7 +381,7 @@ public class ServerTaskStorage : ITaskStorage
 
     public bool IsSignedIn { get; set; }
 
-    public async Task<IEnumerable<TaskItem>> GetAll()
+    public async IAsyncEnumerable<TaskItem> GetAll()
     {
         TaskItemPage? tasks = null;
         try
@@ -393,18 +393,15 @@ public class ServerTaskStorage : ITaskStorage
             //TODO пробросить ошибку пользователю
         }
 
-        List<TaskItem> taskItems = [];
-
         if (tasks?.Tasks != null)
         {
             foreach (var task in tasks.Tasks)
             {
                 var mapped = mapper.Map<TaskItem>(task);
-                taskItems.Add(mapped);
-                //yield return mapped;
+                yield return mapped;
             }
         }
-        return taskItems;
+        //return taskItems;
     }
 
     public async Task<bool> Save(TaskItem item)
