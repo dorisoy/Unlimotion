@@ -448,7 +448,8 @@ public class TaskTreeManager : ITaskTreeManager
            {
                var childItem = await Storage.Load(childTask);
 
-               if (!(childItem.ParentTasks ?? []).Contains(task.Id))
+               if (childItem != null 
+                    && !(childItem.ParentTasks ?? []).Contains(task.Id))
                {
                   childItem.ParentTasks!.Add(task.Id);
                   await Storage.Save(childItem);
