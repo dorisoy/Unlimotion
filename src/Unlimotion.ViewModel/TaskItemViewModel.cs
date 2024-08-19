@@ -268,10 +268,32 @@ namespace Unlimotion.ViewModel
                 return await taskStorage.Clone(vm, destination);
             };
 
-            UnblockCommand = ReactiveCommand.Create<TaskItemViewModel>(
-                async m =>
+            UnblockCommand = ReactiveCommand.Create<TaskItemViewModel, Unit>(
+                (m) =>
                 {
-                    await taskStorage.Unblock(this, m);                    
+                    taskStorage.Unblock(Model.Id, m.Id);
+                    return Unit.Default;
+                });
+
+            UnblockMeCommand = ReactiveCommand.Create<TaskItemViewModel, Unit>(
+                (m) =>
+                {
+                    taskStorage.Unblock(m.Id, Model.Id);
+                    return Unit.Default;
+                });
+
+            DeleteRelationWithParentCommand = ReactiveCommand.Create<TaskItemViewModel, Unit> (
+                (m) =>
+                {
+                    taskStorage.RemoveParentChildConnection(m.Id, Model.Id);
+                    return Unit.Default;
+                });
+
+            DeleteRelationWithChildCommand = ReactiveCommand.Create<TaskItemViewModel, Unit>(
+                (m) =>
+                {
+                    taskStorage.RemoveParentChildConnection(Model.Id, m.Id);
+                    return Unit.Default;
                 });
 
             //Subscribe to Save when property changed
@@ -504,8 +526,10 @@ namespace Unlimotion.ViewModel
         public ObservableCollection<string> Blocks { get; set; } = new();
         public ObservableCollection<string> BlockedBy { get; set; } = new();
 
-        public ICommand UnblockCommand { get; set; }
+        public ICommand UnblockCommand { get; set; }        
         public ICommand UnblockMeCommand { get; set; }
+        public ICommand DeleteRelationWithParentCommand { get; set; }
+        public ICommand DeleteRelationWithChildCommand { get; set; }
 
         public async Task CopyInto(TaskItemViewModel destination)
         {
@@ -524,7 +548,7 @@ namespace Unlimotion.ViewModel
 
         public async void BlockBy(TaskItemViewModel blocker)
         {
-            await _taskStorage.Block(this, blocker);
+            await _taskStorage.Block(Id, blocker.Id);
         }
 
         public IEnumerable<TaskItemViewModel> GetFirstParentsPath()

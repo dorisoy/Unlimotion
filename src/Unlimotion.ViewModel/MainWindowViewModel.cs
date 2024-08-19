@@ -124,7 +124,7 @@ namespace Unlimotion.ViewModel
                 
                 var task = new TaskItemViewModel(new TaskItem(), taskRepository);
                 
-                await taskRepository?.AddChild(task, CurrentTaskItem);
+                await taskRepository?.AddChild(task, CurrentTaskItem.Id);
 
 
                 CurrentTaskItem = task;
@@ -423,8 +423,7 @@ namespace Unlimotion.ViewModel
                     var actions = new TaskWrapperActions()
                     {
                         ChildSelector = m => m.ContainsTasks.ToObservableChangeSet(),
-                        RemoveAction = m => { },
-                        RemoveFunc = RemoveTask,
+                        RemoveAction = RemoveTask,
                         GetBreadScrumbs = BredScrumbsAlgorithms.WrapperParent,
                         SortComparer = sortObservable,
                         Filter = new() { taskFilter },
@@ -465,8 +464,7 @@ namespace Unlimotion.ViewModel
                     var actions = new TaskWrapperActions()
                     {
                         ChildSelector = m => m.ContainsTasks.ToObservableChangeSet(),
-                        RemoveAction = m => { },
-                        RemoveFunc = RemoveTask,
+                        RemoveAction = RemoveTask,
                         GetBreadScrumbs = BredScrumbsAlgorithms.FirstTaskParent,
                     };
                     var wrapper = new TaskWrapperViewModel(null, item, actions);
@@ -490,8 +488,7 @@ namespace Unlimotion.ViewModel
                     var actions = new TaskWrapperActions()
                     {
                         ChildSelector = m => m.ContainsTasks.ToObservableChangeSet(),
-                        RemoveAction = m => { },
-                        RemoveFunc = RemoveTask,
+                        RemoveAction = RemoveTask,
                         GetBreadScrumbs = BredScrumbsAlgorithms.FirstTaskParent,
                         Filter = new() { taskFilter },
                     };
@@ -543,8 +540,7 @@ namespace Unlimotion.ViewModel
                     var actions = new TaskWrapperActions()
                     {
                         ChildSelector = m => m.ContainsTasks.ToObservableChangeSet(),
-                        RemoveAction = m => { },
-                        RemoveFunc = RemoveTask,
+                        RemoveAction = RemoveTask,
                         GetBreadScrumbs = BredScrumbsAlgorithms.FirstTaskParent,
                     };
                     var wrapper = new TaskWrapperViewModel(null, item, actions);
@@ -574,8 +570,7 @@ namespace Unlimotion.ViewModel
                     var actions = new TaskWrapperActions
                     {
                         ChildSelector = m => m.ContainsTasks.ToObservableChangeSet(),
-                        RemoveAction = m => { },
-                        RemoveFunc = RemoveTask,
+                        RemoveAction = RemoveTask,
                         GetBreadScrumbs = BredScrumbsAlgorithms.FirstTaskParent,
                     };
                     var wrapper = new TaskWrapperViewModel(null, item, actions);
@@ -630,8 +625,7 @@ namespace Unlimotion.ViewModel
                     var actions = new TaskWrapperActions
                     {
                         ChildSelector = m => m.ContainsTasks.ToObservableChangeSet(),
-                        RemoveAction = m => { },
-                        RemoveFunc = RemoveTask,
+                        RemoveAction = RemoveTask,
                         GetBreadScrumbs = BredScrumbsAlgorithms.FirstTaskParent,
                     };
                     var wrapper = new TaskWrapperViewModel(null, item, actions);
@@ -691,7 +685,10 @@ namespace Unlimotion.ViewModel
                         var actions = new TaskWrapperActions()
                         {
                             ChildSelector = m => m.ContainsTasks.ToObservableChangeSet(),
-                            RemoveAction = m => { },
+                            RemoveAction = (m) => {
+
+                                m.TaskItem.DeleteRelationWithChildCommand.Execute(m);
+                            },
                             SortComparer = sortObservable
                         };
                         var wrapper = new TaskWrapperViewModel(null, item, actions);
@@ -714,7 +711,10 @@ namespace Unlimotion.ViewModel
                         var actions = new TaskWrapperActions()
                         {
                             ChildSelector = m => m.ParentsTasks.ToObservableChangeSet(),
-                            RemoveAction = m => { },
+                            RemoveAction = (m) => {
+
+                                m.TaskItem.DeleteRelationWithParentCommand.Execute(m.Parent.TaskItem);                              
+                            },
                             SortComparer = sortObservable
                         };
                         var wrapper = new TaskWrapperViewModel(null, item, actions);
@@ -736,9 +736,9 @@ namespace Unlimotion.ViewModel
                         var actions = new TaskWrapperActions()
                         {
                             ChildSelector = m => m.BlocksTasks.ToObservableChangeSet(),
-                            RemoveAction = m =>
+                            RemoveAction = (m) => 
                             {
-                                m.TaskItem.UnblockCommand.Execute(m.Parent.TaskItem);
+                                m.Parent.TaskItem.UnblockCommand.Execute(m);
                             },
                             SortComparer = sortObservable
                         };
@@ -763,7 +763,7 @@ namespace Unlimotion.ViewModel
                             ChildSelector = m => m.BlockedByTasks.ToObservableChangeSet(),
                             RemoveAction = m =>
                             {
-                                m.TaskItem.UnblockCommand.Execute(m.Parent.TaskItem);
+                                m.TaskItem.UnblockMeCommand.Execute(m.Parent.TaskItem);
                             },
                             SortComparer = sortObservable
                         };
@@ -814,7 +814,7 @@ namespace Unlimotion.ViewModel
             }
         }
 
-        private async Task RemoveTask(TaskWrapperViewModel task)
+        private async void RemoveTask(TaskWrapperViewModel task)
         {
             if (task.TaskItem.RemoveRequiresConfirmation(task.Parent?.TaskItem.Id))
             {

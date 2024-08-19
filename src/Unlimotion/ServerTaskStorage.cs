@@ -475,11 +475,10 @@ public class ServerTaskStorage : ITaskStorage
         return true;
     }
 
-    public async Task<bool> AddChild(TaskItemViewModel change, TaskItemViewModel? currentTask)
+    public async Task<bool> AddChild(TaskItemViewModel change, string currentTaskId)
     {
         var taskItemList = await TaskTreeManager.AddChildTask(
-            mapper.Map<Server.Domain.TaskItem>(change.Model),
-            mapper.Map<Server.Domain.TaskItem>(currentTask?.Model));
+            mapper.Map<Server.Domain.TaskItem>(change.Model), currentTaskId);
         foreach (var task in taskItemList)
         {
             UpdateCache(task);
@@ -537,9 +536,9 @@ public class ServerTaskStorage : ITaskStorage
             additionalItemParents.Add(mapper.Map<Server.Domain.TaskItem>(newParent.Model));
         }
 
-        var taskItemList = await TaskTreeManager.CopyTaskInto(
-            mapper.Map<Server.Domain.TaskItem>(change.Model),
-            additionalItemParents[0]);
+        var taskItemList = await TaskTreeManager.AddNewParentToTask(
+            change.Model.Id,
+            additionalItemParents[0].Id);
         foreach (var task in taskItemList)
         {
             UpdateCache(task);
@@ -554,22 +553,21 @@ public class ServerTaskStorage : ITaskStorage
 
     public async Task<bool> MoveInto(TaskItemViewModel change, TaskItemViewModel[]? additionalParents, TaskItemViewModel? currentTask)
     {
-        var taskItemList = await TaskTreeManager.MoveTaskInto(
-            mapper.Map<Server.Domain.TaskItem>(change.Model),
-            mapper.Map<Server.Domain.TaskItem>(additionalParents[0].Model),
-            mapper.Map<Server.Domain.TaskItem>(currentTask?.Model));
-        foreach (var task in taskItemList)
-        {
-            UpdateCache(task);
-        }
+        var taskItemList = await TaskTreeManager.MoveTaskToNewParent(
+            change.Id,
+            additionalParents[0].Id,
+            currentTask?.Id);
+        
+        taskItemList.ForEach(t => UpdateCache(t));
+        
         return true;
     }
 
-    public async Task<bool> Unblock(TaskItemViewModel change, TaskItemViewModel? currentTask)
+    public async Task<bool> Unblock(string changeId, string currentTaskId)
     {
         var taskItemList = await TaskTreeManager.UnblockTask(
-            mapper.Map<Server.Domain.TaskItem>(change.Model),
-            mapper.Map<Server.Domain.TaskItem>(currentTask?.Model!));
+            changeId,
+            currentTaskId);
         foreach (var task in taskItemList)
         {
             UpdateCache(task);
@@ -577,15 +575,21 @@ public class ServerTaskStorage : ITaskStorage
         return true;
     }
 
-    public async Task<bool> Block(TaskItemViewModel change, TaskItemViewModel? currentTask)
+    public async Task<bool> Block(string changeId, string currentTaskId)
     {
         var taskItemList = await TaskTreeManager.BlockTask(
-            mapper.Map<Server.Domain.TaskItem>(change.Model),
-            mapper.Map<Server.Domain.TaskItem>(currentTask?.Model!));
-        foreach (var task in taskItemList)
-        {
-            UpdateCache(task);
-        }
+            changeId,
+            currentTaskId);
+
+        taskItemList.ForEach(t => UpdateCache(t));
+     
         return true;
+    }
+
+    public async Task RemoveParentChildConnection(string parentId, string childId)
+    {
+        var taskItemList = await TaskTreeManager.DeleteParentChildRelation(parentId, childId);
+
+        taskItemList.ForEach(item => UpdateCache(item));
     }
 }

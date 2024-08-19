@@ -16,7 +16,6 @@ public class TaskWrapperActions
 {
     public Func<TaskItemViewModel, IObservable<IChangeSet<TaskItemViewModel>>> ChildSelector;
     public Action<TaskWrapperViewModel> RemoveAction;
-    public Func<TaskWrapperViewModel, Task>? RemoveFunc;
     public Func<TaskWrapperViewModel, string> GetBreadScrumbs;
     public List<IObservable<Func<TaskItemViewModel, bool>>> Filter = new() { Filters.Default };
     public IObservable<IComparer<TaskWrapperViewModel>> SortComparer = Comparers.Default;
@@ -81,7 +80,7 @@ public class TaskWrapperViewModel : DisposableList
         _actions = actions;
         RemoveCommand = ReactiveCommand.CreateFromTask(async () =>
         {
-            if (_actions.RemoveFunc != null) await _actions.RemoveFunc?.Invoke(this);
+            if (_actions.RemoveAction != null) _actions.RemoveAction?.Invoke(this);
         });
     }
 
