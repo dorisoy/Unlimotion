@@ -275,26 +275,12 @@ namespace Unlimotion.ViewModel
                     return Unit.Default;
                 });
 
-            UnblockMeCommand = ReactiveCommand.Create<TaskItemViewModel, Unit>(
-                (m) =>
-                {
-                    taskStorage.Unblock(m.Id, Model.Id);
-                    return Unit.Default;
-                });
-
-            DeleteRelationWithParentCommand = ReactiveCommand.Create<TaskItemViewModel, Unit> (
-                (m) =>
-                {
-                    taskStorage.RemoveParentChildConnection(m.Id, Model.Id);
-                    return Unit.Default;
-                });
-
-            DeleteRelationWithChildCommand = ReactiveCommand.Create<TaskItemViewModel, Unit>(
+            DeleteParentChildRelationCommand = ReactiveCommand.Create<TaskItemViewModel, Unit> (
                 (m) =>
                 {
                     taskStorage.RemoveParentChildConnection(Model.Id, m.Id);
                     return Unit.Default;
-                });
+                });            
 
             //Subscribe to Save when property changed
             if (this is INotifyPropertyChanged inpc)
@@ -527,10 +513,8 @@ namespace Unlimotion.ViewModel
         public ObservableCollection<string> BlockedBy { get; set; } = new();
 
         public ICommand UnblockCommand { get; set; }        
-        public ICommand UnblockMeCommand { get; set; }
-        public ICommand DeleteRelationWithParentCommand { get; set; }
-        public ICommand DeleteRelationWithChildCommand { get; set; }
-
+        public ICommand DeleteParentChildRelationCommand { get; set; }
+        
         public async Task CopyInto(TaskItemViewModel destination)
         {
             await _taskStorage.CopyInto(this, [destination]);

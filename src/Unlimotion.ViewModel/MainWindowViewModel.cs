@@ -687,7 +687,7 @@ namespace Unlimotion.ViewModel
                             ChildSelector = m => m.ContainsTasks.ToObservableChangeSet(),
                             RemoveAction = (m) => {
 
-                                m.TaskItem.DeleteRelationWithChildCommand.Execute(m);
+                                m.Parent.TaskItem.DeleteParentChildRelationCommand.Execute(m.TaskItem);
                             },
                             SortComparer = sortObservable
                         };
@@ -713,7 +713,7 @@ namespace Unlimotion.ViewModel
                             ChildSelector = m => m.ParentsTasks.ToObservableChangeSet(),
                             RemoveAction = (m) => {
 
-                                m.TaskItem.DeleteRelationWithParentCommand.Execute(m.Parent.TaskItem);                              
+                                m.TaskItem.DeleteParentChildRelationCommand.Execute(m.Parent.TaskItem);                              
                             },
                             SortComparer = sortObservable
                         };
@@ -738,7 +738,7 @@ namespace Unlimotion.ViewModel
                             ChildSelector = m => m.BlocksTasks.ToObservableChangeSet(),
                             RemoveAction = (m) => 
                             {
-                                m.Parent.TaskItem.UnblockCommand.Execute(m);
+                                m.TaskItem.UnblockCommand.Execute(m.Parent.TaskItem);
                             },
                             SortComparer = sortObservable
                         };
@@ -763,7 +763,7 @@ namespace Unlimotion.ViewModel
                             ChildSelector = m => m.BlockedByTasks.ToObservableChangeSet(),
                             RemoveAction = m =>
                             {
-                                m.TaskItem.UnblockMeCommand.Execute(m.Parent.TaskItem);
+                                m.Parent.TaskItem.UnblockCommand.Execute(m.TaskItem);
                             },
                             SortComparer = sortObservable
                         };

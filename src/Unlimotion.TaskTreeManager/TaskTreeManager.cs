@@ -1,5 +1,6 @@
 ﻿using Polly;
 using Polly.Retry;
+using System.Collections;
 using System.Collections.Generic;
 using Unlimotion.Server.Domain;
 
@@ -14,7 +15,7 @@ public class TaskTreeManager : ITaskTreeManager
     }
     public async Task<List<TaskItem>> AddTask(TaskItem change, TaskItem? currentTask = null, bool isBlocked = false)
     {
-        var result = new List<TaskItem>();
+        var result = new AutoUpdatingDictionary<string, TaskItem>();
 
         //Create
         if (currentTask is null)
@@ -26,7 +27,7 @@ public class TaskTreeManager : ITaskTreeManager
                     change.PrevVersion = false;
                     change.SortOrder = DateTime.Now;
                     await Storage.Save(change);
-                    result.Add(change);
+                    result.AddOrUpdate(change.Id, change);                    
 
                     return true;
                 }
@@ -35,7 +36,8 @@ public class TaskTreeManager : ITaskTreeManager
                     return false;
                 }
             });
-            return result;
+
+            return [..result.Dict.Values];            
         }
         //CreateSibling, CreateBlockedSibling
         else
@@ -51,19 +53,20 @@ public class TaskTreeManager : ITaskTreeManager
                         change.PrevVersion = false;
                         await Storage.Save(change);
                         newTaskId = change.Id;
+                        result.AddOrUpdate(change.Id, change);
                     }
 
-                    if (currentTask != null)
+                    if ((currentTask.ParentTasks ?? []).Count > 0)
                     {
-                        (currentTask.ParentTasks ?? [])
-                        .ForEach(async parent => result.AddRange(
-                            await CreateParentChildRelation(parent, newTaskId)));
-                    }    
+                        currentTask.ParentTasks.ForEach(async parent =>                            
+                                result.AddOrUpdateRange((
+                                await CreateParentChildRelation(parent, newTaskId)).Dict));
+                    }      
+                       
    
                     if (isBlocked && currentTask != null)
                     {
-                        result.AddRange(
-                            await CreateBlockingBlockedByRelation(change.Id, currentTask.Id));                        
+                        result.AddOrUpdateRange((await CreateBlockingBlockedByRelation(change.Id, currentTask.Id)).Dict);                        
                     }
 
                     return true;
@@ -75,12 +78,12 @@ public class TaskTreeManager : ITaskTreeManager
             });
 
 
-            return result;
+            return [.. result.Dict.Values];
         }
     }
     public async Task<List<TaskItem>> AddChildTask(TaskItem change, string currentTaskId)
     {
-        var result = new List<TaskItem>();
+        var result = new AutoUpdatingDictionary<string, TaskItem>();
         string newTaskId = null;
 
         //CreateInner
@@ -95,7 +98,7 @@ public class TaskTreeManager : ITaskTreeManager
                     newTaskId = change.Id;
                 }
 
-                result.AddRange(await CreateParentChildRelation(currentTaskId, change.Id));                
+                result.AddOrUpdateRange((await CreateParentChildRelation(currentTaskId, change.Id)).Dict);                
 
                 return true;
             }
@@ -105,11 +108,11 @@ public class TaskTreeManager : ITaskTreeManager
             }
         });
 
-        return result;
+        return [.. result.Dict.Values];
     }
     public async Task<List<TaskItem>> DeleteTask(TaskItem change, bool deleteInStorage = true)
     {
-        var result = new List<TaskItem>();
+        var result = new AutoUpdatingDictionary<string, TaskItem>();
 
         await IsCompletedAsync(async () =>
         {
@@ -123,31 +126,31 @@ public class TaskTreeManager : ITaskTreeManager
                     if (deletingTask.ContainsTasks.Any())
                     {
                         deletingTask.ContainsTasks
-                        .ForEach(async child => result.AddRange(
-                            await BreakParentChildRelation(deletingTask.Id, child)));
+                        .ForEach(async child => result.AddOrUpdateRange(
+                            (await BreakParentChildRelation(deletingTask.Id, child)).Dict));
                     }
                     //удалить во всех grandParents ссылки в Contains на удаляемый таск
                     if (deletingTask.ParentTasks.Any())
                     {
                         deletingTask.ParentTasks
-                        .ForEach(async parent => result.AddRange(
-                            await BreakParentChildRelation(parent, deletingTask.Id)));
+                        .ForEach(async parent => result.AddOrUpdateRange(
+                            (await BreakParentChildRelation(parent, deletingTask.Id)).Dict));
                     }
 
                     //удалить во всех блокирующих тасках ссылку на удаляемый таск
                     if (deletingTask.BlockedByTasks.Any())
                     {
                         deletingTask.BlockedByTasks
-                        .ForEach(async blocker => result.AddRange(
-                            await BreakBlockingBlockedByRelation(deletingTask.Id, blocker)));                    
+                        .ForEach(async blocker => result.AddOrUpdateRange(
+                            (await BreakBlockingBlockedByRelation(deletingTask.Id, blocker)).Dict));                    
                     }
 
                     //удалить во всех блокируемых тасках ссылку на удаляемый таск 
                     if (deletingTask.BlocksTasks.Any())
                     {
                         deletingTask.BlocksTasks
-                        .ForEach(async blocked => result.AddRange(
-                            await BreakBlockingBlockedByRelation(blocked, deletingTask.Id)));                        
+                        .ForEach(async blocked => result.AddOrUpdateRange(
+                            (await BreakBlockingBlockedByRelation(blocked, deletingTask.Id)).Dict));                        
                     }
 
                     //удалить сам таск из БД
@@ -162,7 +165,7 @@ public class TaskTreeManager : ITaskTreeManager
             };
         });
 
-        return result;
+        return [.. result.Dict.Values];
     }
     public async Task UpdateTask(TaskItem change)
     {
@@ -181,7 +184,7 @@ public class TaskTreeManager : ITaskTreeManager
     }
     public async Task<List<TaskItem>> CloneTask(TaskItem change, List<TaskItem> stepParents)
     {
-        var result = new List<TaskItem>();
+        var result = new AutoUpdatingDictionary<string, TaskItem>();
         string newTaskId = null;
 
         await IsCompletedAsync(async Task<bool> () =>
@@ -195,8 +198,8 @@ public class TaskTreeManager : ITaskTreeManager
                     newTaskId = change.Id;
                 }
 
-                stepParents.ForEach(async parent => result.AddRange(
-                await CreateParentChildRelation(parent.Id, newTaskId)));                                
+                stepParents.ForEach(async parent => result.AddOrUpdateRange(
+                (await CreateParentChildRelation(parent.Id, newTaskId)).Dict));                                
 
                 return true;
             }
@@ -206,42 +209,42 @@ public class TaskTreeManager : ITaskTreeManager
             }
         });
 
-        return result;
+        return [.. result.Dict.Values];
     }
     public async Task<List<TaskItem>> AddNewParentToTask(string changeId, string additionalParentId)
     {
-        var result = new List<TaskItem>();
-        result.AddRange(await CreateParentChildRelation(additionalParentId, changeId));
-        
-        return result;
+        var result = new AutoUpdatingDictionary<string, TaskItem>();
+        result.AddOrUpdateRange((await CreateParentChildRelation(additionalParentId, changeId)).Dict);
+
+        return [.. result.Dict.Values];
     }
     public async Task<List<TaskItem>> MoveTaskToNewParent(string changeId, string newParentId, string? prevParentId)
     {
-        var result = new List<TaskItem>();
+        var result = new AutoUpdatingDictionary<string, TaskItem>();
         if (prevParentId is not null)
         {
-            result.AddRange(await BreakParentChildRelation(prevParentId, changeId));
+            result.AddOrUpdateRange((await BreakParentChildRelation(prevParentId, changeId)).Dict);
         }
-        result.AddRange(await CreateParentChildRelation(newParentId, changeId));
+        result.AddOrUpdateRange((await CreateParentChildRelation(newParentId, changeId)).Dict);
 
-        return result;
+        return [.. result.Dict.Values];
     }
     public async Task<List<TaskItem>> UnblockTask(string taskToUnblockId, string blockingTaskId)
     {
-        var result = new List<TaskItem>();
+        var result = new AutoUpdatingDictionary<string, TaskItem>();
 
-        result.AddRange(await BreakBlockingBlockedByRelation(taskToUnblockId, blockingTaskId));       
+        result.AddOrUpdateRange((await BreakBlockingBlockedByRelation(taskToUnblockId, blockingTaskId)).Dict);
 
-        return result;
+        return [.. result.Dict.Values];
     }
 
     public async Task<List<TaskItem>> BlockTask(string taskToBlockId, string blockingTaskId)
     {
-        var result = new List<TaskItem>();
+        var result = new AutoUpdatingDictionary<string, TaskItem>();
 
-        result.AddRange(await CreateBlockingBlockedByRelation(taskToBlockId, blockingTaskId));      
+        result.AddOrUpdateRange((await CreateBlockingBlockedByRelation(taskToBlockId, blockingTaskId)).Dict);
 
-        return result;
+        return [.. result.Dict.Values];
     }
 
     public async Task<TaskItem> LoadTask(string taskId)
@@ -288,16 +291,16 @@ public class TaskTreeManager : ITaskTreeManager
 
     public async Task<List<TaskItem>> DeleteParentChildRelation(string parentId, string childId)
     {
-        var result = new List<TaskItem>();
+        var result = new AutoUpdatingDictionary<string, TaskItem>();
         
-        result.AddRange(await BreakParentChildRelation(parentId, childId));
-        
-        return result;
+        result.AddOrUpdateRange((await BreakParentChildRelation(parentId, childId)).Dict);
+
+        return [.. result.Dict.Values];
     }
 
-    private async Task<List<TaskItem>> BreakParentChildRelation(string parentId, string childId)
+    private async Task<AutoUpdatingDictionary<string, TaskItem>> BreakParentChildRelation(string parentId, string childId)
     {
-        var result = new List<TaskItem>();
+        var result = new AutoUpdatingDictionary<string, TaskItem>();
 
         await IsCompletedAsync(async () =>
         {
@@ -308,7 +311,7 @@ public class TaskTreeManager : ITaskTreeManager
                 {
                     parentTaskItem.ContainsTasks.Remove(childId);
                     await Storage.Save(parentTaskItem);
-                    result.Add(parentTaskItem);
+                    result.AddOrUpdate(parentTaskItem.Id, parentTaskItem);
                 }
 
                 var childTaskItem = await Storage.Load(childId);
@@ -316,7 +319,7 @@ public class TaskTreeManager : ITaskTreeManager
                 {
                     childTaskItem.ParentTasks!.Remove(parentId);
                     await Storage.Save(childTaskItem);
-                    result.Add(childTaskItem);
+                    result.AddOrUpdate(childTaskItem.Id, childTaskItem);
                 }
 
                 return true;
@@ -330,9 +333,9 @@ public class TaskTreeManager : ITaskTreeManager
         return result;
     }
 
-    private async Task<List<TaskItem>> CreateParentChildRelation(string parentId, string childId)
+    private async Task<AutoUpdatingDictionary<string, TaskItem>> CreateParentChildRelation(string parentId, string childId)
     {
-        var result = new List<TaskItem>();
+        var result = new AutoUpdatingDictionary<string, TaskItem>();
 
         await IsCompletedAsync(async () =>
         {
@@ -344,7 +347,7 @@ public class TaskTreeManager : ITaskTreeManager
                     parentTaskItem.ContainsTasks.Add(childId);
                     parentTaskItem.SortOrder = DateTime.Now;
                     await Storage.Save(parentTaskItem);
-                    result.Add(parentTaskItem);
+                    result.AddOrUpdate(parentTaskItem.Id, parentTaskItem);
                 }
 
                 var childTaskItem = await Storage.Load(childId);
@@ -353,7 +356,7 @@ public class TaskTreeManager : ITaskTreeManager
                     childTaskItem.ParentTasks!.Add(parentId);
                     childTaskItem.SortOrder = DateTime.Now;
                     await Storage.Save(childTaskItem);
-                    result.Add(childTaskItem);
+                    result.AddOrUpdate(childTaskItem.Id, childTaskItem);
                 }
 
                 return true;
@@ -367,9 +370,9 @@ public class TaskTreeManager : ITaskTreeManager
         return result;
     }
 
-    private async Task<List<TaskItem>> CreateBlockingBlockedByRelation(string taskToBlockId, string blockingTaskId)
+    private async Task<AutoUpdatingDictionary<string, TaskItem>> CreateBlockingBlockedByRelation(string taskToBlockId, string blockingTaskId)
     {
-        var result = new List<TaskItem>();
+        var result = new AutoUpdatingDictionary<string, TaskItem>();
 
         await IsCompletedAsync(async () =>
         {
@@ -381,7 +384,7 @@ public class TaskTreeManager : ITaskTreeManager
                     blockingTaskItem.BlocksTasks.Add(taskToBlockId);
                     blockingTaskItem.SortOrder = DateTime.Now;
                     await Storage.Save(blockingTaskItem);
-                    result.Add(blockingTaskItem);
+                    result.AddOrUpdate(blockingTaskItem.Id, blockingTaskItem);
                 }
 
                 var taskToBlockItem = await Storage.Load(taskToBlockId);
@@ -390,7 +393,7 @@ public class TaskTreeManager : ITaskTreeManager
                     taskToBlockItem.BlockedByTasks.Add(blockingTaskId);
                     taskToBlockItem.SortOrder = DateTime.Now;
                     await Storage.Save(taskToBlockItem);
-                    result.Add(taskToBlockItem);
+                    result.AddOrUpdate(taskToBlockItem.Id, taskToBlockItem);
                 }
 
                 return true;
@@ -404,9 +407,9 @@ public class TaskTreeManager : ITaskTreeManager
         return result;
     }
 
-    private async Task<List<TaskItem>> BreakBlockingBlockedByRelation(string taskToUnblockId, string blockingTaskId)
+    private async Task<AutoUpdatingDictionary<string, TaskItem>> BreakBlockingBlockedByRelation(string taskToUnblockId, string blockingTaskId)
     {
-        var result = new List<TaskItem>();
+        var result = new AutoUpdatingDictionary<string, TaskItem>();
 
         await IsCompletedAsync(async () =>
         {
@@ -417,7 +420,7 @@ public class TaskTreeManager : ITaskTreeManager
                 {
                     blockingTaskItem.BlocksTasks.Remove(taskToUnblockId);
                     await Storage.Save(blockingTaskItem);
-                    result.Add(blockingTaskItem);
+                    result.AddOrUpdate(blockingTaskItem.Id, blockingTaskItem);
                 }
 
                 var taskToUnblockItem = await Storage.Load(taskToUnblockId);
@@ -425,7 +428,7 @@ public class TaskTreeManager : ITaskTreeManager
                 {
                     taskToUnblockItem.BlockedByTasks.Remove(blockingTaskId);
                     await Storage.Save(taskToUnblockItem);
-                    result.Add(taskToUnblockItem);
+                    result.AddOrUpdate(taskToUnblockItem.Id, taskToUnblockItem);
                 }
 
                 return true;

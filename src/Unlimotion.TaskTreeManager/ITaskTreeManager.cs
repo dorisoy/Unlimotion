@@ -25,7 +25,7 @@ public interface ITaskTreeManager
 
     public Task<TaskItem> LoadTask(string taskId);
 
-    public Task <List<TaskItem>> DeleteParentChildRelation(string parentId, string childId);
+    public Task<List<TaskItem>> DeleteParentChildRelation(string parentId, string childId);
 
 }
 
