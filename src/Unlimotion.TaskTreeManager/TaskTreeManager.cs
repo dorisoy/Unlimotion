@@ -1,5 +1,6 @@
 ﻿using Polly;
 using Polly.Retry;
+using System.Collections;
 using System.Collections.Generic;
 using Unlimotion.Server.Domain;
 
@@ -14,7 +15,7 @@ public class TaskTreeManager : ITaskTreeManager
     }
     public async Task<List<TaskItem>> AddTask(TaskItem change, TaskItem? currentTask = null, bool isBlocked = false)
     {
-        var result = new List<TaskItem>();
+        var result = new AutoUpdatingDictionary<string, TaskItem>();
 
         //Create
         if (currentTask is null)
@@ -26,7 +27,7 @@ public class TaskTreeManager : ITaskTreeManager
                     change.PrevVersion = false;
                     change.SortOrder = DateTime.Now;
                     await Storage.Save(change);
-                    result.Add(change);
+                    result.AddOrUpdate(change.Id, change);                    
 
                     return true;
                 }
@@ -35,7 +36,8 @@ public class TaskTreeManager : ITaskTreeManager
                     return false;
                 }
             });
-            return result;
+
+            return [..result.Dict.Values];            
         }
         //CreateSibling, CreateBlockedSibling
         else
@@ -51,19 +53,22 @@ public class TaskTreeManager : ITaskTreeManager
                         change.PrevVersion = false;
                         await Storage.Save(change);
                         newTaskId = change.Id;
+                        result.AddOrUpdate(change.Id, change);
                     }
 
-                    if (currentTask != null)
+                    if ((currentTask.ParentTasks ?? []).Count > 0)
                     {
-                        (currentTask.ParentTasks ?? [])
-                        .ForEach(async parent => result.AddRange(
-                            await CreateParentChildRelation(parent, newTaskId)));
-                    }    
+                        currentTask.ParentTasks.ForEach(async parent =>
+                        {
+                            var parentModel = await Storage.Load(parent);
+                            result.AddOrUpdateRange((
+                            await CreateParentChildRelation(parentModel, change)).Dict);
+                        });
+                    }                       
    
                     if (isBlocked && currentTask != null)
                     {
-                        result.AddRange(
-                            await CreateBlockingBlockedByRelation(change.Id, currentTask.Id));                        
+                        result.AddOrUpdateRange((await CreateBlockingBlockedByRelation(change, currentTask)).Dict);                        
                     }
 
                     return true;
@@ -75,12 +80,12 @@ public class TaskTreeManager : ITaskTreeManager
             });
 
 
-            return result;
+            return [.. result.Dict.Values];
         }
     }
-    public async Task<List<TaskItem>> AddChildTask(TaskItem change, string currentTaskId)
+    public async Task<List<TaskItem>> AddChildTask(TaskItem change, TaskItem currentTask)
     {
-        var result = new List<TaskItem>();
+        var result = new AutoUpdatingDictionary<string, TaskItem>();
         string newTaskId = null;
 
         //CreateInner
@@ -95,7 +100,7 @@ public class TaskTreeManager : ITaskTreeManager
                     newTaskId = change.Id;
                 }
 
-                result.AddRange(await CreateParentChildRelation(currentTaskId, change.Id));                
+                result.AddOrUpdateRange((await CreateParentChildRelation(currentTask, change)).Dict);                
 
                 return true;
             }
@@ -105,54 +110,63 @@ public class TaskTreeManager : ITaskTreeManager
             }
         });
 
-        return result;
+        return [.. result.Dict.Values];
     }
     public async Task<List<TaskItem>> DeleteTask(TaskItem change, bool deleteInStorage = true)
     {
-        var result = new List<TaskItem>();
+        var result = new AutoUpdatingDictionary<string, TaskItem>();
 
         await IsCompletedAsync(async () =>
         {
             try
             {
                 //удалить во всех детях ссылки в Parents на удаляемый таск
-                var deletingTask = (deleteInStorage) ? await Storage.Load(change.Id) : change;
-
-                if (deletingTask is not null)
+                               
+                if (change.ContainsTasks.Any())
                 {
-                    if (deletingTask.ContainsTasks.Any())
+                    change.ContainsTasks.ForEach(async child =>
                     {
-                        deletingTask.ContainsTasks
-                        .ForEach(async child => result.AddRange(
-                            await BreakParentChildRelation(deletingTask.Id, child)));
-                    }
-                    //удалить во всех grandParents ссылки в Contains на удаляемый таск
-                    if (deletingTask.ParentTasks.Any())
+                        var childItem = await Storage.Load(child);
+                        result.AddOrUpdateRange(
+                        (await BreakParentChildRelation(change, childItem)).Dict);
+                    });
+                }                       
+                
+                //удалить во всех grandParents ссылки в Contains на удаляемый таск
+                if (change.ParentTasks.Any())
+                {
+                    change.ParentTasks.ForEach(async parent =>
                     {
-                        deletingTask.ParentTasks
-                        .ForEach(async parent => result.AddRange(
-                            await BreakParentChildRelation(parent, deletingTask.Id)));
-                    }
-
-                    //удалить во всех блокирующих тасках ссылку на удаляемый таск
-                    if (deletingTask.BlockedByTasks.Any())
-                    {
-                        deletingTask.BlockedByTasks
-                        .ForEach(async blocker => result.AddRange(
-                            await BreakBlockingBlockedByRelation(deletingTask.Id, blocker)));                    
-                    }
-
-                    //удалить во всех блокируемых тасках ссылку на удаляемый таск 
-                    if (deletingTask.BlocksTasks.Any())
-                    {
-                        deletingTask.BlocksTasks
-                        .ForEach(async blocked => result.AddRange(
-                            await BreakBlockingBlockedByRelation(blocked, deletingTask.Id)));                        
-                    }
-
-                    //удалить сам таск из БД
-                    if (deleteInStorage) await Storage.Remove(change.Id);
+                        var parentItem = await Storage.Load(parent);
+                        result.AddOrUpdateRange(
+                        (await BreakParentChildRelation(parentItem, change)).Dict);
+                    });
                 }
+
+                //удалить во всех блокирующих тасках ссылку на удаляемый таск
+                if (change.BlockedByTasks.Any())
+                {
+                    change.BlockedByTasks.ForEach(async blocker =>
+                    {
+                        var blockerItem = await Storage.Load(blocker);
+                        result.AddOrUpdateRange(
+                        (await BreakBlockingBlockedByRelation(change, blockerItem)).Dict);
+                    });
+                }
+
+                //удалить во всех блокируемых тасках ссылку на удаляемый таск 
+                if (change.BlocksTasks.Any())
+                {
+                    change.BlocksTasks.ForEach(async blocked =>
+                    {
+                        var blockedItem = await Storage.Load(blocked);
+                        result.AddOrUpdateRange(
+                        (await BreakBlockingBlockedByRelation(blockedItem, change)).Dict);
+                    });
+                }
+
+                //удалить сам таск из БД
+                if (deleteInStorage) await Storage.Remove(change.Id);                
 
                 return true;
             }
@@ -162,7 +176,7 @@ public class TaskTreeManager : ITaskTreeManager
             };
         });
 
-        return result;
+        return [.. result.Dict.Values];
     }
     public async Task UpdateTask(TaskItem change)
     {
@@ -181,7 +195,7 @@ public class TaskTreeManager : ITaskTreeManager
     }
     public async Task<List<TaskItem>> CloneTask(TaskItem change, List<TaskItem> stepParents)
     {
-        var result = new List<TaskItem>();
+        var result = new AutoUpdatingDictionary<string, TaskItem>();
         string newTaskId = null;
 
         await IsCompletedAsync(async Task<bool> () =>
@@ -195,8 +209,8 @@ public class TaskTreeManager : ITaskTreeManager
                     newTaskId = change.Id;
                 }
 
-                stepParents.ForEach(async parent => result.AddRange(
-                await CreateParentChildRelation(parent.Id, newTaskId)));                                
+                stepParents.ForEach(async parent => result.AddOrUpdateRange(
+                (await CreateParentChildRelation(parent, change)).Dict));                                
 
                 return true;
             }
@@ -206,42 +220,42 @@ public class TaskTreeManager : ITaskTreeManager
             }
         });
 
-        return result;
+        return [.. result.Dict.Values];
     }
-    public async Task<List<TaskItem>> AddNewParentToTask(string changeId, string additionalParentId)
+    public async Task<List<TaskItem>> AddNewParentToTask(TaskItem change, TaskItem additionalParent)
     {
-        var result = new List<TaskItem>();
-        result.AddRange(await CreateParentChildRelation(additionalParentId, changeId));
-        
-        return result;
+        var result = new AutoUpdatingDictionary<string, TaskItem>();
+        result.AddOrUpdateRange((await CreateParentChildRelation(additionalParent, change)).Dict);
+
+        return [.. result.Dict.Values];
     }
-    public async Task<List<TaskItem>> MoveTaskToNewParent(string changeId, string newParentId, string? prevParentId)
+    public async Task<List<TaskItem>> MoveTaskToNewParent(TaskItem change, TaskItem newParent, TaskItem? prevParent)
     {
-        var result = new List<TaskItem>();
-        if (prevParentId is not null)
+        var result = new AutoUpdatingDictionary<string, TaskItem>();
+        if (prevParent is not null)
         {
-            result.AddRange(await BreakParentChildRelation(prevParentId, changeId));
+            result.AddOrUpdateRange((await BreakParentChildRelation(prevParent, change)).Dict);
         }
-        result.AddRange(await CreateParentChildRelation(newParentId, changeId));
+        result.AddOrUpdateRange((await CreateParentChildRelation(newParent, change)).Dict);
 
-        return result;
+        return [.. result.Dict.Values];
     }
-    public async Task<List<TaskItem>> UnblockTask(string taskToUnblockId, string blockingTaskId)
+    public async Task<List<TaskItem>> UnblockTask(TaskItem taskToUnblock, TaskItem blockingTask)
     {
-        var result = new List<TaskItem>();
+        var result = new AutoUpdatingDictionary<string, TaskItem>();
 
-        result.AddRange(await BreakBlockingBlockedByRelation(taskToUnblockId, blockingTaskId));       
+        result.AddOrUpdateRange((await BreakBlockingBlockedByRelation(taskToUnblock, blockingTask)).Dict);
 
-        return result;
+        return [.. result.Dict.Values];
     }
 
-    public async Task<List<TaskItem>> BlockTask(string taskToBlockId, string blockingTaskId)
+    public async Task<List<TaskItem>> BlockTask(TaskItem taskToBlock, TaskItem blockingTask)
     {
-        var result = new List<TaskItem>();
+        var result = new AutoUpdatingDictionary<string, TaskItem>();
 
-        result.AddRange(await CreateBlockingBlockedByRelation(taskToBlockId, blockingTaskId));      
+        result.AddOrUpdateRange((await CreateBlockingBlockedByRelation(taskToBlock, blockingTask)).Dict);
 
-        return result;
+        return [.. result.Dict.Values];
     }
 
     public async Task<TaskItem> LoadTask(string taskId)
@@ -286,37 +300,35 @@ public class TaskTreeManager : ITaskTreeManager
         return task;
     }
 
-    public async Task<List<TaskItem>> DeleteParentChildRelation(string parentId, string childId)
+    public async Task<List<TaskItem>> DeleteParentChildRelation(TaskItem parent, TaskItem child)
     {
-        var result = new List<TaskItem>();
+        var result = new AutoUpdatingDictionary<string, TaskItem>();
         
-        result.AddRange(await BreakParentChildRelation(parentId, childId));
-        
-        return result;
+        result.AddOrUpdateRange((await BreakParentChildRelation(parent, child)).Dict);
+
+        return [.. result.Dict.Values];
     }
 
-    private async Task<List<TaskItem>> BreakParentChildRelation(string parentId, string childId)
+    private async Task<AutoUpdatingDictionary<string, TaskItem>> BreakParentChildRelation(TaskItem parent, TaskItem child)
     {
-        var result = new List<TaskItem>();
+        var result = new AutoUpdatingDictionary<string, TaskItem>();
 
         await IsCompletedAsync(async () =>
         {
             try
             {
-                var parentTaskItem = await Storage.Load(parentId);
-                if (parentTaskItem != null && parentTaskItem.ContainsTasks.Contains(childId))
+                if (parent.ContainsTasks.Contains(child.Id))
                 {
-                    parentTaskItem.ContainsTasks.Remove(childId);
-                    await Storage.Save(parentTaskItem);
-                    result.Add(parentTaskItem);
+                    parent.ContainsTasks.Remove(child.Id);
+                    await Storage.Save(parent);
+                    result.AddOrUpdate(parent.Id, parent);
                 }
 
-                var childTaskItem = await Storage.Load(childId);
-                if (childTaskItem != null && (childTaskItem.ParentTasks ?? []).Contains(parentId))
+                if ((child.ParentTasks ?? []).Contains(parent.Id))
                 {
-                    childTaskItem.ParentTasks!.Remove(parentId);
-                    await Storage.Save(childTaskItem);
-                    result.Add(childTaskItem);
+                    child.ParentTasks!.Remove(parent.Id);
+                    await Storage.Save(child);
+                    result.AddOrUpdate(child.Id, child);
                 }
 
                 return true;
@@ -330,30 +342,63 @@ public class TaskTreeManager : ITaskTreeManager
         return result;
     }
 
-    private async Task<List<TaskItem>> CreateParentChildRelation(string parentId, string childId)
+    private async Task<AutoUpdatingDictionary<string, TaskItem>> CreateParentChildRelation(TaskItem parent, TaskItem child)
     {
-        var result = new List<TaskItem>();
+        var result = new AutoUpdatingDictionary<string, TaskItem>();
 
         await IsCompletedAsync(async () =>
         {
             try
             {
-                var parentTaskItem = await Storage.Load(parentId);
-                if (parentTaskItem != null && !parentTaskItem.ContainsTasks.Contains(childId))
+                if (!parent.ContainsTasks.Contains(child.Id))
                 {
-                    parentTaskItem.ContainsTasks.Add(childId);
-                    parentTaskItem.SortOrder = DateTime.Now;
-                    await Storage.Save(parentTaskItem);
-                    result.Add(parentTaskItem);
+                    parent.ContainsTasks.Add(child.Id);
+                    parent.SortOrder = DateTime.Now;
+                    await Storage.Save(parent);
+                    result.AddOrUpdate(parent.Id, parent);
                 }
 
-                var childTaskItem = await Storage.Load(childId);
-                if (childTaskItem != null && !(childTaskItem.ParentTasks ?? []).Contains(parentId))
+               if (!(child.ParentTasks ?? []).Contains(parent.Id))
+               {
+                    child.ParentTasks!.Add(parent.Id);
+                    child.SortOrder = DateTime.Now;
+                    await Storage.Save(child);
+                    result.AddOrUpdate(child.Id, child);
+               }
+
+                return true;
+            }
+            catch
+            {
+                return false;
+            };
+        });
+
+        return result;
+    }
+
+    private async Task<AutoUpdatingDictionary<string, TaskItem>> CreateBlockingBlockedByRelation(TaskItem taskToBlock, TaskItem blockingTask)
+    {
+        var result = new AutoUpdatingDictionary<string, TaskItem>();
+
+        await IsCompletedAsync(async () =>
+        {
+            try
+            {
+                if (!blockingTask.BlocksTasks.Contains(taskToBlock.Id))
                 {
-                    childTaskItem.ParentTasks!.Add(parentId);
-                    childTaskItem.SortOrder = DateTime.Now;
-                    await Storage.Save(childTaskItem);
-                    result.Add(childTaskItem);
+                    blockingTask.BlocksTasks.Add(taskToBlock.Id);
+                    blockingTask.SortOrder = DateTime.Now;
+                    await Storage.Save(blockingTask);
+                    result.AddOrUpdate(blockingTask.Id, blockingTask);
+                }
+
+                if (!taskToBlock.BlockedByTasks.Contains(blockingTask.Id))
+                {
+                    taskToBlock.BlockedByTasks.Add(blockingTask.Id);
+                    taskToBlock.SortOrder = DateTime.Now;
+                    await Storage.Save(taskToBlock);
+                    result.AddOrUpdate(taskToBlock.Id, taskToBlock);
                 }
 
                 return true;
@@ -367,65 +412,26 @@ public class TaskTreeManager : ITaskTreeManager
         return result;
     }
 
-    private async Task<List<TaskItem>> CreateBlockingBlockedByRelation(string taskToBlockId, string blockingTaskId)
+    private async Task<AutoUpdatingDictionary<string, TaskItem>> BreakBlockingBlockedByRelation(TaskItem taskToUnblock, TaskItem blockingTask)
     {
-        var result = new List<TaskItem>();
+        var result = new AutoUpdatingDictionary<string, TaskItem>();
 
         await IsCompletedAsync(async () =>
         {
             try
             {
-                var blockingTaskItem = await Storage.Load(blockingTaskId);
-                if (!blockingTaskItem.BlocksTasks.Contains(taskToBlockId))
+                if (blockingTask.BlocksTasks.Contains(taskToUnblock.Id))
                 {
-                    blockingTaskItem.BlocksTasks.Add(taskToBlockId);
-                    blockingTaskItem.SortOrder = DateTime.Now;
-                    await Storage.Save(blockingTaskItem);
-                    result.Add(blockingTaskItem);
+                    blockingTask.BlocksTasks.Remove(taskToUnblock.Id);
+                    await Storage.Save(blockingTask);
+                    result.AddOrUpdate(blockingTask.Id, blockingTask);
                 }
 
-                var taskToBlockItem = await Storage.Load(taskToBlockId);
-                if (!taskToBlockItem.BlockedByTasks.Contains(blockingTaskId))
+                if (taskToUnblock.BlockedByTasks.Contains(blockingTask.Id))
                 {
-                    taskToBlockItem.BlockedByTasks.Add(blockingTaskId);
-                    taskToBlockItem.SortOrder = DateTime.Now;
-                    await Storage.Save(taskToBlockItem);
-                    result.Add(taskToBlockItem);
-                }
-
-                return true;
-            }
-            catch
-            {
-                return false;
-            };
-        });
-
-        return result;
-    }
-
-    private async Task<List<TaskItem>> BreakBlockingBlockedByRelation(string taskToUnblockId, string blockingTaskId)
-    {
-        var result = new List<TaskItem>();
-
-        await IsCompletedAsync(async () =>
-        {
-            try
-            {
-                var blockingTaskItem = await Storage.Load(blockingTaskId);
-                if (blockingTaskItem.BlocksTasks.Contains(taskToUnblockId))
-                {
-                    blockingTaskItem.BlocksTasks.Remove(taskToUnblockId);
-                    await Storage.Save(blockingTaskItem);
-                    result.Add(blockingTaskItem);
-                }
-
-                var taskToUnblockItem = await Storage.Load(taskToUnblockId);
-                if (taskToUnblockItem.BlockedByTasks.Contains(blockingTaskId))
-                {
-                    taskToUnblockItem.BlockedByTasks.Remove(blockingTaskId);
-                    await Storage.Save(taskToUnblockItem);
-                    result.Add(taskToUnblockItem);
+                    taskToUnblock.BlockedByTasks.Remove(blockingTask.Id);
+                    await Storage.Save(taskToUnblock);
+                    result.AddOrUpdate(taskToUnblock.Id, taskToUnblock);
                 }
 
                 return true;

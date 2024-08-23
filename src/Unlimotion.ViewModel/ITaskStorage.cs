@@ -22,14 +22,14 @@ public interface ITaskStorage
     //public event EventHandler<EventArgs> Initiated;
     //public void SetPause(bool pause);
     public Task<bool> Add(TaskItemViewModel change, TaskItemViewModel? currentTask = null, bool isBlocked = false);
-    public Task<bool> AddChild(TaskItemViewModel change, string currentTask);
+    public Task<bool> AddChild(TaskItemViewModel change, TaskItemViewModel currentTask);
     public Task<bool> Delete(TaskItemViewModel change, bool deleteInStorage  = true);
     public Task<bool> Update(TaskItemViewModel change);
     public Task<TaskItemViewModel> Clone(TaskItemViewModel change, params TaskItemViewModel[]? additionalParents);
     public Task<bool> CopyInto(TaskItemViewModel change, TaskItemViewModel[]? additionalParents);
     public Task<bool> MoveInto(TaskItemViewModel change, TaskItemViewModel[] additionalParents, TaskItemViewModel? currentTask);
-    public Task<bool> Unblock(string taskToUnblockId, string blockingTaskId);
-    public Task<bool> Block(string changeId, string currentTaskId);
-    public Task RemoveParentChildConnection(string parentId, string childId);
+    public Task<bool> Unblock(TaskItemViewModel taskToUnblock, TaskItemViewModel blockingTask);
+    public Task<bool> Block(TaskItemViewModel change, TaskItemViewModel currentTask);
+    public Task RemoveParentChildConnection(TaskItemViewModel parent, TaskItemViewModel child);
 
 }

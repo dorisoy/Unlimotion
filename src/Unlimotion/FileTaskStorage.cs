@@ -249,10 +249,11 @@ namespace Unlimotion
             return true;
         }
 
-        public async Task<bool> AddChild(TaskItemViewModel change, string currentTaskId)
+        public async Task<bool> AddChild(TaskItemViewModel change, TaskItemViewModel currentTask)
         {
             var taskItemList = (await TaskTreeManager.AddChildTask(
-                mapper.Map<Server.Domain.TaskItem>(change.Model), currentTaskId))
+                mapper.Map<Server.Domain.TaskItem>(change.Model),
+                mapper.Map<Server.Domain.TaskItem>(currentTask.Model)))
                 .OrderBy(t => t.SortOrder);
 
             var newTask = taskItemList.Last();
@@ -320,8 +321,8 @@ namespace Unlimotion
             }
 
             var taskItemList = await TaskTreeManager.AddNewParentToTask(
-                change.Id, 
-                additionalItemParents[0].Id);
+                mapper.Map<Server.Domain.TaskItem>(change.Model),
+                mapper.Map<Server.Domain.TaskItem>(additionalParents[0].Model));
 
             taskItemList.ForEach(item => UpdateCache(item));
 
@@ -331,38 +332,42 @@ namespace Unlimotion
         public async Task<bool> MoveInto(TaskItemViewModel change, TaskItemViewModel[] additionalParents, TaskItemViewModel? currentTask)
         {
             var taskItemList = await TaskTreeManager.MoveTaskToNewParent(
-                change.Id,
-                additionalParents[0].Id,
-                currentTask?.Id);
+                mapper.Map<Server.Domain.TaskItem>(change.Model),
+                mapper.Map<Server.Domain.TaskItem>(additionalParents[0].Model),
+                mapper.Map<Server.Domain.TaskItem>(currentTask.Model));
             
             taskItemList.ForEach(item => UpdateCache(item));
             
             return true;
         }
 
-        public async Task<bool> Unblock(string taskToUnblockId, string blockingTaskId)
+        public async Task<bool> Unblock(TaskItemViewModel taskToUnblock, TaskItemViewModel blockingTask)
         {
             var taskItemList = await TaskTreeManager.UnblockTask(
-                taskToUnblockId,
-                blockingTaskId);
+                mapper.Map<Server.Domain.TaskItem>(taskToUnblock.Model),
+                mapper.Map<Server.Domain.TaskItem>(blockingTask.Model));          
 
             taskItemList.ForEach(item => UpdateCache(item));
             
             return true;
         }
 
-        public async Task<bool> Block(string changeId, string currentTaskId)
+        public async Task<bool> Block(TaskItemViewModel change, TaskItemViewModel currentTask)
         {
-            var taskItemList = await TaskTreeManager.BlockTask(changeId, currentTaskId);
+            var taskItemList = await TaskTreeManager.BlockTask(
+                mapper.Map<Server.Domain.TaskItem>(change.Model),
+                mapper.Map<Server.Domain.TaskItem>(currentTask.Model));
 
             taskItemList.ForEach(item => UpdateCache(item));
             
             return true;
         }
 
-        public async Task RemoveParentChildConnection(string parentId, string childId)
+        public async Task RemoveParentChildConnection(TaskItemViewModel parent, TaskItemViewModel child)
         {
-            var taskItemList = await TaskTreeManager.DeleteParentChildRelation(parentId, childId);
+            var taskItemList = await TaskTreeManager.DeleteParentChildRelation(
+                mapper.Map<Server.Domain.TaskItem>(parent.Model),
+                mapper.Map<Server.Domain.TaskItem>(child.Model));
 
             taskItemList.ForEach(item => UpdateCache(item));
         }
